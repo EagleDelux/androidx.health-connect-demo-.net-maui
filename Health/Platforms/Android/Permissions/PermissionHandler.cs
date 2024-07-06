@@ -1,6 +1,7 @@
 ﻿using Android.App;
 using Android.Util;
 using AndroidX.Core.App;
+using Health.Platforms.Android.Callbacks;
 using Java.Util;
 using System;
 using System.Collections.Generic;
@@ -13,7 +14,7 @@ namespace Health.Platforms.Android.Permissions
 {
     internal class PermissionHandler
     {
-        public static async Task<ISet> Request(Java.Lang.Object permissions, CancellationToken cancellationToken = default)
+        public static async Task<List<string>> Request(Java.Lang.Object permissions, CancellationToken cancellationToken = default)
         {
             try
             {
@@ -35,7 +36,8 @@ namespace Health.Platforms.Android.Permissions
 
 
                 JObject? result = await whenCompletedSource.Task.ConfigureAwait(false);
-                return (ISet)result;
+                //return (ISet)result;
+                return KotlinCallback.ConvertISetToList((ISet)result);
 
                 void RequestPermission()
                 => activity.RequestPermission(permissions, whenCompletedSource);

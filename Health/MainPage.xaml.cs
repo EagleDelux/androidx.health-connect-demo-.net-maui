@@ -56,9 +56,12 @@ namespace Health
             StepsRecord stepsRecord = new StepsRecord(startTime,startZoneOffset, endTime, endZoneOffset, 1, metadata);
             DistanceRecord distanceRecord = new DistanceRecord(startTime, startZoneOffset, endTime, endZoneOffset, Length.InvokeMeters(11), metadata);
 
-            var javaSet = new HashSet();
-            javaSet.Add(HealthPermission.GetReadPermission(Reflection.GetOrCreateKotlinClass(stepsRecord.Class)));
-            javaSet.Add(HealthPermission.GetReadPermission(Reflection.GetOrCreateKotlinClass(distanceRecord.Class)));
+            //var PermissionsToGrant = new HashSet();
+            List<string> PermissionsToGrant = new List<string>();
+            PermissionsToGrant.Add(HealthPermission.GetReadPermission(Reflection.GetOrCreateKotlinClass(stepsRecord.Class)));
+            PermissionsToGrant.Add(HealthPermission.GetReadPermission(Reflection.GetOrCreateKotlinClass(distanceRecord.Class)));
+
+            
 
 
             if (OperatingSystem.IsAndroidVersionAtLeast(26))
@@ -79,35 +82,44 @@ namespace Health
                     var healthConnectClient = new KotlinCallback(HealthConnectClient.GetOrCreate(Android.App.Application.Context));
 
                     List<string> GrantedPermissions = await healthConnectClient.GetGrantedPermissions();
-                    //Check if missing permissons 
-                    ISet PermissionResult = await PermissionHandler.Request(javaSet);
 
-                    var Result = await healthConnectClient.AggregateGroupByDuration(request);
-                    int? StepCountTotal = null;
-                    Java.Lang.Object? DistanceTotal;
-
-                    foreach (AggregationResultGroupedByDuration item in Result)
+                    List<string> MissingPermissions = PermissionsToGrant.Except(GrantedPermissions).ToList();
+                    if (MissingPermissions.Count > 0)
                     {
-
-                        if (item.Result.Contains(StepsRecord.CountTotal))
-                        {
-                            StepCountTotal = (int)item.Result.Get(StepsRecord.CountTotal).JavaCast<Java.Lang.Number>();
-                        }
-
-                        if (item.Result.Contains(DistanceRecord.DistanceTotal))
-                        {
-                            DistanceTotal = item.Result.Get(DistanceRecord.DistanceTotal);
-                        }
+                        GrantedPermissions = await PermissionHandler.Request(new HashSet(PermissionsToGrant));
                     }
-                    CounterBtn.Text = StepCountTotal.ToString();
+
+                    bool allPermissionsGranted = PermissionsToGrant.All(permission => GrantedPermissions.Contains(permission));
+                    if(allPermissionsGranted)
+                    {
+                        var Result = await healthConnectClient.AggregateGroupByDuration(request);
+                        int? StepCountTotal = null;
+                        Java.Lang.Object? DistanceTotal;
+
+                        foreach (AggregationResultGroupedByDuration item in Result)
+                        {
+
+                            if (item.Result.Contains(StepsRecord.CountTotal))
+                            {
+                                StepCountTotal = (int)item.Result.Get(StepsRecord.CountTotal).JavaCast<Java.Lang.Number>();
+                            }
+
+                            if (item.Result.Contains(DistanceRecord.DistanceTotal))
+                            {
+                                DistanceTotal = item.Result.Get(DistanceRecord.DistanceTotal);
+                            }
+                        }
+                        CounterBtn.Text = StepCountTotal.ToString();
+                        SemanticScreenReader.Announce(CounterBtn.Text);
+                    }
+
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine(ex.Message);
                 }
             }
-
-            SemanticScreenReader.Announce(CounterBtn.Text);
+            
         }
 
     }

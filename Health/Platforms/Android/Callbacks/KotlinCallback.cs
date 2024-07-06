@@ -1,6 +1,7 @@
 ﻿using Android.Runtime;
 using AndroidX.Health.Connect.Client;
 using AndroidX.Health.Connect.Client.Aggregate;
+using Java.Util;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -71,17 +72,25 @@ namespace Health.Platforms.Android.Callbacks
             if (result is Kotlin.Collections.AbstractMutableSet abstractMutableSet)
             {
                 Java.Util.ISet javaSet = abstractMutableSet.JavaCast<Java.Util.ISet>();
-                List<string> listOfStrings = new List<string>();
-                var iterator = javaSet.Iterator();
-
-                while (iterator.HasNext)
-                {
-                    Java.Lang.Object element = iterator.Next();
-                    listOfStrings.Add((string)element.JavaCast<Java.Lang.String>());
-                }
-                return listOfStrings;
+                return ConvertISetToList(javaSet);
             }
             return null;
         }
+
+
+        public static List<string> ConvertISetToList(ISet javaSet)
+        {
+            List<string> listOfStrings = new List<string>();
+            var iterator = javaSet.Iterator();
+
+            while (iterator.HasNext)
+            {
+                Java.Lang.Object element = iterator.Next();
+                listOfStrings.Add((string)element.JavaCast<Java.Lang.String>());
+            }
+
+            return listOfStrings;
+        }
+
     }
 }
