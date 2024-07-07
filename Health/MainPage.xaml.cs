@@ -20,55 +20,50 @@ namespace Health
 {
     public partial class MainPage : ContentPage
     {
-        int count = 0;
-        static ActivityResultContract activityResultContract = PermissionController.CreateRequestPermissionResultContract();
-        private ActivityResultLauncher launcher = ((AndroidX.Activity.ComponentActivity)Platform.CurrentActivity).RegisterForActivityResult(activityResultContract, new ActivityResultCallback());
         public MainPage()
         {
             InitializeComponent();
-
         }
 
-        private class ActivityResultCallback : Java.Lang.Object, IActivityResultCallback
+        private Instant DateTimeToInstant(DateTime date)
         {
-            public void OnActivityResult(Java.Lang.Object? result) // Make the parameter nullable
-            {
-                if (result is ISet PermissionGranted)
-                {
-                    ;
-                }
-
-            }
+            long unixTimestamp = ((DateTimeOffset)date).ToUnixTimeSeconds();
+            return Instant.OfEpochSecond(unixTimestamp);
         }
 
         private async void OnCounterClicked(object sender, EventArgs e)
         {
+            DateTime startOfDay = new DateTime(DateTime.Now.Year, DateTime.Now.Month, DateTime.Now.Day, 0, 0, 0, DateTimeKind.Local);
+            Instant startTime = DateTimeToInstant(startOfDay);
+            Instant endTime = DateTimeToInstant(DateTime.Now);
 
-            var zonedDateTime = ZonedDateTime.Now();
-            string startTimeString = zonedDateTime.MinusDays(0).MinusHours(zonedDateTime.Hour).MinusMinutes(zonedDateTime.Minute).MinusSeconds(zonedDateTime.Second).ToString().Substring(0, 19) + "Z";
-            Instant startTime = Instant.Parse(startTimeString);
- 
+            StepsRecord stepsRecord = new StepsRecord(startTime, ZoneOffset.OfHours(2), endTime, ZoneOffset.OfHours(1), 1, new Metadata());
+            DistanceRecord distanceRecord = new DistanceRecord(startTime, ZoneOffset.OfHours(2), endTime, ZoneOffset.OfHours(1), Length.InvokeMeters(11), new Metadata());
 
-            Instant endTime = Instant.Parse(ZonedDateTime.Now().ToString().Substring(0, 19) + "Z");
-            ZoneOffset startZoneOffset = ZoneOffset.OfHours(2);
-            ZoneOffset endZoneOffset = ZoneOffset.OfHours(1);
-            Metadata metadata = new Metadata();
-            StepsRecord stepsRecord = new StepsRecord(startTime,startZoneOffset, endTime, endZoneOffset, 1, metadata);
-            DistanceRecord distanceRecord = new DistanceRecord(startTime, startZoneOffset, endTime, endZoneOffset, Length.InvokeMeters(11), metadata);
-
-            //var PermissionsToGrant = new HashSet();
             List<string> PermissionsToGrant = new List<string>();
-            PermissionsToGrant.Add(HealthPermission.GetReadPermission(Reflection.GetOrCreateKotlinClass(stepsRecord.Class)));
-            PermissionsToGrant.Add(HealthPermission.GetReadPermission(Reflection.GetOrCreateKotlinClass(distanceRecord.Class)));
+            PermissionsToGrant.Add(HealthPermission.GetReadPermission(Kotlin.Jvm.Internal.Reflection.GetOrCreateKotlinClass(stepsRecord.Class)));
+            PermissionsToGrant.Add(HealthPermission.GetReadPermission(Kotlin.Jvm.Internal.Reflection.GetOrCreateKotlinClass(distanceRecord.Class)));
+            string providerPackageName = "com.google.android.apps.healthdata";
+            int availabilityStatus = HealthConnectClient.GetSdkStatus(Platform.CurrentActivity, providerPackageName);
 
-            
-
-
-            if (OperatingSystem.IsAndroidVersionAtLeast(26))
+            if (availabilityStatus == HealthConnectClient.SdkUnavailable)
             {
+                return; // early return as there is no viable integration
+            }
 
-                //int availabilityStatus = HealthConnectClient.GetSdkStatus(Platform.CurrentActivity);
-                
+            if (availabilityStatus == HealthConnectClient.SdkUnavailableProviderUpdateRequired || true)
+            {
+                // Optionally redirect to package installer to find a provider, for example:
+                Platform.CurrentActivity.StartActivity(new Android.Content.Intent(Android.Content.Intent.ActionView, Android.Net.Uri.Parse($"market://details?id={providerPackageName}&url=healthconnect%3A%2F%2Fonboarding"))
+                    .SetPackage("com.android.vending")
+                    .PutExtra("overlay", true)
+                    .PutExtra("callerId", Platform.CurrentActivity.PackageName));
+                return;
+            }
+
+
+            if (OperatingSystem.IsAndroidVersionAtLeast(26) && (availabilityStatus == HealthConnectClient.SdkAvailable))
+            {
 
                 ICollection<AggregateMetric> metrics = new List<AggregateMetric> { StepsRecord.CountTotal, DistanceRecord.DistanceTotal };
 
@@ -76,15 +71,13 @@ namespace Health
 
                 AggregateGroupByDurationRequest request = new AggregateGroupByDurationRequest(metrics, TimeRangeFilter.After(startTime), Duration.OfDays(1), dataOrginFilter);
 
-                
+
                 try
                 {
                     var healthConnectClient = new KotlinCallback(HealthConnectClient.GetOrCreate(Android.App.Application.Context));
 
                     List<string> GrantedPermissions = await healthConnectClient.GetGrantedPermissions();
 
-                    //create a list of missing permissions by 
-                    //comparing the granted permissions with the permissions to grant
                     List<string> MissingPermissions = PermissionsToGrant.Except(GrantedPermissions).ToList();
 
                     if (MissingPermissions.Count > 0)
@@ -93,7 +86,7 @@ namespace Health
                     }
 
                     bool allPermissionsGranted = PermissionsToGrant.All(permission => GrantedPermissions.Contains(permission));
-                    if(allPermissionsGranted)
+                    if (allPermissionsGranted)
                     {
                         var Result = await healthConnectClient.AggregateGroupByDuration(request);
                         var StepCountTotal = Result.FirstOrDefault(x => x.Result.Contains(StepsRecord.CountTotal))?.Result.Get(StepsRecord.CountTotal).JavaCast<Java.Lang.Number>();
@@ -113,7 +106,7 @@ namespace Health
                     Console.WriteLine(ex.Message);
                 }
             }
-            
+
         }
 
     }
