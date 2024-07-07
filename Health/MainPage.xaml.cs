@@ -83,7 +83,10 @@ namespace Health
 
                     List<string> GrantedPermissions = await healthConnectClient.GetGrantedPermissions();
 
+                    //create a list of missing permissions by 
+                    //comparing the granted permissions with the permissions to grant
                     List<string> MissingPermissions = PermissionsToGrant.Except(GrantedPermissions).ToList();
+
                     if (MissingPermissions.Count > 0)
                     {
                         GrantedPermissions = await PermissionHandler.Request(new HashSet(PermissionsToGrant));
@@ -93,24 +96,15 @@ namespace Health
                     if(allPermissionsGranted)
                     {
                         var Result = await healthConnectClient.AggregateGroupByDuration(request);
-                        int? StepCountTotal = null;
-                        Java.Lang.Object? DistanceTotal;
+                        var StepCountTotal = Result.FirstOrDefault(x => x.Result.Contains(StepsRecord.CountTotal))?.Result.Get(StepsRecord.CountTotal).JavaCast<Java.Lang.Number>();
+                        var DistanceTotal = Result.FirstOrDefault(x => x.Result.Contains(DistanceRecord.DistanceTotal))?.Result.Get(DistanceRecord.DistanceTotal).JavaCast<AndroidX.Health.Connect.Client.Units.Length>();
 
-                        foreach (AggregationResultGroupedByDuration item in Result)
+
+                        if (StepCountTotal != null)
                         {
-
-                            if (item.Result.Contains(StepsRecord.CountTotal))
-                            {
-                                StepCountTotal = (int)item.Result.Get(StepsRecord.CountTotal).JavaCast<Java.Lang.Number>();
-                            }
-
-                            if (item.Result.Contains(DistanceRecord.DistanceTotal))
-                            {
-                                DistanceTotal = item.Result.Get(DistanceRecord.DistanceTotal);
-                            }
+                            CounterBtn.Text = StepCountTotal.ToString() + " " + DistanceTotal.Meters.ToString();
+                            SemanticScreenReader.Announce(CounterBtn.Text);
                         }
-                        CounterBtn.Text = StepCountTotal.ToString();
-                        SemanticScreenReader.Announce(CounterBtn.Text);
                     }
 
                 }
